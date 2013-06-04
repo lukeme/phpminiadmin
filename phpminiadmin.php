@@ -25,133 +25,150 @@
 
 //constants
  $VERSION='1.8.120514';
- $MAX_ROWS_PER_PAGE=50; #max number of rows in select per one page
- $D="\r\n"; #default delimiter for export
- $BOM=chr(239).chr(187).chr(191);
- $SHOW_T="SHOW TABLE STATUS";
- $DB=array(); #working copy for DB settings
+ $MAX_ROWS_PER_PAGE = 50; #max number of rows in select per one page
+$D = "\r\n"; #default delimiter for export
+$BOM = chr(239) . chr(187) . chr(191);
+$SHOW_T = "SHOW TABLE STATUS";
+$DB = array(); #working copy for DB settings
 
- $self=$_SERVER['PHP_SELF'];
+$self = $_SERVER['PHP_SELF'];
+$table = $_REQUEST['table'];
+$total = '';
 
- session_start();
- if (!isset($_SESSION['XSS'])) $_SESSION['XSS']=get_rand_str(16);
- $xurl='XSS='.$_SESSION['XSS'];
+session_start();
+if (!isset($_SESSION['XSS']))
+    $_SESSION['XSS'] = get_rand_str(16);
+$xurl = 'XSS=' . $_SESSION['XSS'];
 
- ini_set('display_errors',1);  #TODO turn off before deploy
- error_reporting(E_ALL ^ E_NOTICE);
+ini_set('display_errors', 1);  #TODO turn off before deploy
+error_reporting(E_ALL ^ E_NOTICE);
 
 //strip quotes if they set
- if (get_magic_quotes_gpc()){
-  $_COOKIE=array_map('killmq',$_COOKIE);
-  $_REQUEST=array_map('killmq',$_REQUEST);
- }
+if (get_magic_quotes_gpc()) {
+    $_COOKIE = array_map('killmq', $_COOKIE);
+    $_REQUEST = array_map('killmq', $_REQUEST);
+}
 
- if (!$ACCESS_PWD) {
-    $_SESSION['is_logged']=true;
+if (!$ACCESS_PWD) {
+    $_SESSION['is_logged'] = true;
     loadcfg();
- }
+}
 
- if ($_REQUEST['login']){
-    if ($_REQUEST['pwd']!=$ACCESS_PWD){
-       $err_msg="Invalid password. Try again";
-    }else{
-       $_SESSION['is_logged']=true;
-       loadcfg();
+if ($_REQUEST['login']) {
+    if ($_REQUEST['pwd'] != $ACCESS_PWD) {
+        $err_msg = "Invalid password. Try again";
+    } else {
+        $_SESSION['is_logged'] = true;
+        loadcfg();
     }
- }
+}
 
- if ($_REQUEST['logoff']){
+if ($_REQUEST['logoff']) {
     check_xss();
     $_SESSION = array();
     savecfg();
     session_destroy();
-    $url=$self;
-    if (!$ACCESS_PWD) $url='/';
+    $url = $self;
+    if (!$ACCESS_PWD)
+        $url = '/';
     header("location: $url");
     exit;
- }
+}
 
- if (!$_SESSION['is_logged']){
+if (!$_SESSION['is_logged']) {
     print_login();
     exit;
- }
+}
 
- if ($_REQUEST['savecfg']){
+if ($_REQUEST['savecfg']) {
     check_xss();
     savecfg();
- }
+}
 
- loadsess();
+loadsess();
 
- if ($_REQUEST['showcfg']){
+if ($_REQUEST['showcfg']) {
     print_cfg();
     exit;
- }
+}
 
- //get initial values
- $SQLq=trim($_REQUEST['q']);
- $page=$_REQUEST['p']+0;
- if ($_REQUEST['refresh'] && $DB['db'] && preg_match('/^show/',$SQLq) ) $SQLq=$SHOW_T;
+//get initial values
+$SQLq = trim($_REQUEST['q']);
+$page = $_REQUEST['p'] + 0;
+if ($_REQUEST['refresh'] && $DB['db'] && preg_match('/^show/', $SQLq))
+    $SQLq = $SHOW_T;
 
- if (db_connect('nodie')){
-    $time_start=microtime_float();
+if (db_connect('nodie')) {
+    $time_start = microtime_float();
 
-    if ($_REQUEST['phpinfo']){
-       ob_start();phpinfo();$sqldr='<div style="font-size:130%">'.ob_get_clean().'</div>';
-    }else{
-     if ($DB['db']){
-      if ($_REQUEST['shex']){
-       print_export();
-      }elseif ($_REQUEST['doex']){
-       check_xss();do_export();
-      }elseif ($_REQUEST['shim']){
-       print_import();
-      }elseif ($_REQUEST['doim']){
-       check_xss();do_import();
-      }elseif ($_REQUEST['dosht']){
-       check_xss();do_sht();
-      }elseif (!$_REQUEST['refresh'] || preg_match('/^select|show|explain|desc/i',$SQLq) ){
-       if ($SQLq)check_xss();
-       do_sql($SQLq);#perform non-select SQL only if not refresh (to avoid dangerous delete/drop)
-      }
-     }else{
-        if ( $_REQUEST['refresh'] ){
-           check_xss();do_sql('show databases');
-        }elseif ( preg_match('/^show\s+(?:databases|status|variables|process)/i',$SQLq) ){
-           check_xss();do_sql($SQLq);
-        }else{
-           $err_msg="Select Database first";
-           if (!$SQLq) do_sql("show databases");
+    if ($_REQUEST['phpinfo']) {
+        ob_start();
+        phpinfo();
+        $sqldr = '<div style="font-size:130%">' . ob_get_clean() . '</div>';
+    } else {
+        if ($DB['db']) {
+            if ($_REQUEST['shex']) {
+                print_export();
+            } elseif ($_REQUEST['doex']) {
+                check_xss();
+                do_export();
+            } elseif ($_REQUEST['shim']) {
+                print_import();
+            } elseif ($_REQUEST['doim']) {
+                check_xss();
+                do_import();
+            } elseif ($_REQUEST['dosht']) {
+                check_xss();
+                do_sht();
+            } elseif (!$_REQUEST['refresh'] || preg_match('/^select|show|explain|desc/i', $SQLq)) {
+                if ($SQLq)
+                    check_xss();
+                do_sql($SQLq); #perform non-select SQL only if not refresh (to avoid dangerous delete/drop)
+            }
+        }else {
+            if ($_REQUEST['refresh']) {
+                check_xss();
+                do_sql('show databases');
+            } elseif (preg_match('/^show\s+(?:databases|status|variables|process)/i', $SQLq)) {
+                check_xss();
+                do_sql($SQLq);
+            } else {
+                $err_msg = "Select Database first";
+                if (!$SQLq)
+                    do_sql("show databases");
+            }
         }
-     }
     }
-    $time_all=ceil((microtime_float()-$time_start)*10000)/10000;
+    $time_all = ceil((microtime_float() - $time_start) * 10000) / 10000;
 
     print_screen();
- }else{
+}else {
     print_cfg();
- }
+}
 
-function do_sql($q){
- global $dbh,$last_sth,$last_sql,$reccount,$out_message,$SQLq,$SHOW_T;
- $SQLq=$q;
+function do_sql($q) {
+    global $dbh, $last_sth, $last_sql, $reccount, $out_message, $SQLq, $SHOW_T;
+    $SQLq = $q;
 
- if (!do_multi_sql($q)){
-    $out_message="Error: ".mysql_error($dbh);
- }else{
-    if ($last_sth && $last_sql){
-       $SQLq=$last_sql;
-       if (preg_match("/^select|show|explain|desc/i",$last_sql)) {
-          if ($q!=$last_sql) $out_message="Results of the last select displayed:";
-          display_select($last_sth,$last_sql);
-       } else {
-         $reccount=mysql_affected_rows($dbh);
-         $out_message="Done.";
-         if (preg_match("/^insert|replace/i",$last_sql)) $out_message.=" Last inserted id=".get_identity();
-         if (preg_match("/^drop|truncate/i",$last_sql)) do_sql($SHOW_T);
-       }
+    if (!do_multi_sql($q)) {
+        $out_message = "Error: " . mysql_error($dbh);
+    } else {
+        if ($last_sth && $last_sql) {
+            $SQLq = $last_sql;
+            if (preg_match("/^select|show|explain|desc/i", $last_sql)) {
+                if ($q != $last_sql)
+                    $out_message = "Results of the last select displayed:";
+                display_select($last_sth, $last_sql);
+            } else {
+                $reccount = mysql_affected_rows($dbh);
+                $out_message = "Done.";
+                if (preg_match("/^insert|replace/i", $last_sql))
+                    $out_message.=" Last inserted id=" . get_identity();
+                if (preg_match("/^drop|truncate/i", $last_sql))
+                    do_sql($SHOW_T);
+            }
+        }
     }
- }
 }
 
 function display_select($sth, $q) {
@@ -257,7 +274,7 @@ function display_select($sth, $q) {
 }
 
 function print_header() {
-    global $err_msg, $VERSION, $DB, $dbh, $self, $is_sht, $xurl, $SHOW_T;
+    global $err_msg, $VERSION, $DB, $dbh, $self, $is_sht, $xurl, $SHOW_T, $table, $total;
     $dbn = $DB['db'];
     ?>
     <!DOCTYPE html>
@@ -291,20 +308,19 @@ function print_header() {
 
             <script type="text/javascript">
                 var LSK = 'pma_', LSKX = LSK + 'max', LSKM = LSK + 'min', qcur = 0, LSMAX = 32;
-
+ 			
                 function $(i) {
                     return document.getElementById(i)
                 }
-                function frefresh() {
+                function frefresh() {//return;
                     var F = document.DF;
-                    <?php
-                        if($_REQUEST['table'] != '*'){
-                    ?>
-                           F.q.value = "SELECT * FROM `<?php echo $_REQUEST['table']; ?>` ORDER BY id DESC";     
-                    <?php
-                        }
-                    ?>
-                    //alert(F.q.value);
+					var talbe_name = $('table').options[$('table').selectedIndex].value;
+					if(talbe_name){
+						//alert(talbe_name);
+						F.q.value = "SELECT * FROM "+ talbe_name +" ORDER BY id DESC";  
+					}else{
+						F.q.value = 'SHOW TABLE STATUS';
+					}   
                     F.method = 'get';
                     F.refresh.value = "1";
                     F.submit();
@@ -321,7 +337,7 @@ function print_header() {
                 }
                 function chksql() {
                     var F = document.DF, v = F.q.value;
-                    if (/^\s*(?:delete|drop|truncate|alter)/.test(v))
+                    if (/^\s*(?:delete|drop|truncate|alter)/i.test(v))
                         if (!ays())
                             return false;
                     if (lschk(1)) {
@@ -440,9 +456,18 @@ function print_header() {
                 <?php if ($_SESSION['is_logged'] && $dbh) : ?>
                         <a href="?<?php echo $xurl ?>&q=show+databases">Databases</a>: <select name="db" onChange="frefresh()"><option value='*'> - select/refresh -</option><option value=''> - show all -</option><?php echo get_db_select($dbn) ?></select>
                     <?php if ($dbn) {
+						$sql = $_REQUEST['q'];
+						$sql = str_replace('+', ' ', $sql);
+						preg_match('/select\s+.*\s+from\s+([a-zA-Z0-9_]+)\s+/i', $sql, $r);
+						if(isset($r[1])){
+							$table = $r[1];
+							$total_res = db_row('SELECT COUNT(*) AS total FROM '.$table);
+							$total = $total_res['total'];
+						}
+						
                         $z = " &#183; <a href='$self?$xurl&db=$dbn"; ?>
-                        <?php echo $z . '&q=' . urlencode($SHOW_T) ?>'>show tables</a>
-                        | Tables: <select name="table" onChange="frefresh()"><option value='*'> - select/refresh -</option><option value=''> - show all -</option><?php echo get_table_select($dbn) ?></select>
+                        <?php echo $z . '&q=' . urlencode($SHOW_T) ?>'>show tables </a>
+                        | Tables: <select id="table" name="table" onChange="frefresh()"><option value=''> - select/refresh -</option><?php echo get_table_select($dbn, $_REQUEST['table']) ?></select>
                         <?php echo $z ?>&shex=1'>export</a>
                         <?php echo $z ?>&shim=1'>import</a>
                     <?php } ?>
@@ -458,7 +483,7 @@ function print_header() {
                 }
 
 function print_screen() {
-    global $out_message, $SQLq, $err_msg, $reccount, $time_all, $sqldr, $page, $MAX_ROWS_PER_PAGE, $is_limited_sql;
+    global $out_message, $SQLq, $err_msg, $reccount, $time_all, $sqldr, $page, $MAX_ROWS_PER_PAGE, $is_limited_sql, $table, $total;
 
     $nav = '';
     if ($is_limited_sql && ($page || $reccount >= $MAX_ROWS_PER_PAGE)) {
@@ -476,7 +501,7 @@ function print_screen() {
 </div>
 
 <div class="dot" style="padding:5px 0 5px 20px">
-    Records: <b><?php echo $reccount ?></b> in <b><?php echo $time_all ?></b> sec<br>
+    Records: <b><?php echo $reccount; ?></b> <?php if($table && $total) echo '/<b> '.$total.' </b>'; ?> in <b><?php echo $time_all ?></b> sec<br>
     <b><?php echo $out_message ?></b>
 </div>
 <div class="sqldr">
@@ -487,7 +512,7 @@ function print_screen() {
 }
 
 function print_footer() {
-    echo '</form><div class="ft">&copy; 2004-2012 <a href="http://osalabs.com" target="_blank">Oleg Savchuk</a>/div></body></html>';
+    echo '</form><div class="ft">&copy; 2004-2012 <a href="http://osalabs.com" target="_blank">Oleg Savchuk</a></div></body></html>';
 }
 
 function print_login() {
@@ -628,25 +653,10 @@ function get_db_select($sel = '') {
     return @sel($arr, 'Database', $sel);
 }
 
-function get_table_select($sel = '') {
-//    global $DB;
-//    if (is_array($_SESSION['sql_sd']) && $_REQUEST['db'] != '*') {//check cache
-//        $arr = $_SESSION['sql_sd'];
-//    } else {
-//        $arr = db_array("show tables", NULL, 1);
-//        if (!is_array($arr)) {
-//            $arr = array(0 => array('db' => $DB['db']));
-//        }
-//        $_SESSION['sql_sd'] = $arr;
-//    }
+function get_table_select($sel = '', $table) {
     db_query("use {$sel}");
     $arr = db_array("show tables", NULL, 1);
-    print_r($arr);
-   // $_SESSION['sql_sd'] = $arr;
-   // $_REQUEST['q'] = 'select+*+from+`'..'`+order+by+id+desc';
-    print_r($arr);
-    //debug(@sel($arr, 'Table', $sel));
-    return @sel($arr, 'Tables_in_'.$sel, '');
+    return @sel($arr, 'Tables_in_'.$sel, $table);
 }
 
 function chset_select($sel = '') {
@@ -1227,5 +1237,4 @@ function check_xss() {
 function rw($s) {#for debug
     echo $s . "<br>\n";
 }
-
 ?>
