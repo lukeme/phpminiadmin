@@ -259,10 +259,14 @@ function display_select($sth, $q) {
                         . "<td><a href=\"$url&q=show+triggers\">trig</a></td>"
                 ;
             } else {
-                if (is_null($v))
+                if (is_null($v)){
                     $v = "NULL";
-                if (is_int(intval($v)) && (abs(time() - intval($v)) <= 864000 * 2))
-                    $v = date('Y-m-d H:i:s', $v);
+                }else {
+                    $field = mysql_field_name($sth, $i);
+                    if(in_array($field , array('create_time', 'update_time', 'created', 'updated'))){
+                        $v = date('Y-m-d H:i:s', $v);
+                    }
+                }
             }
             if ($is_show_crt)
                 $v = "<pre>$v</pre>";
